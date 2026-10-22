@@ -4,6 +4,12 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v1.4.0] — 2026-10-22
+
+### Changed
+- Requires esptool 5.6. Its espefuse carries its own bitstring, so neither
+  idftool nor its frozen builds depend on the bitstring package.
+
 ## [v1.3.1] — 2026-10-07
 
 ### Changed
@@ -416,6 +422,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Initial release.
 
+[v1.4.0]: https://github.com/nebkat/idftool/releases/tag/v1.4.0
 [v1.3.1]: https://github.com/nebkat/idftool/releases/tag/v1.3.1
 [v1.3.0]: https://github.com/nebkat/idftool/releases/tag/v1.3.0
 [v1.2.0]: https://github.com/nebkat/idftool/releases/tag/v1.2.0
