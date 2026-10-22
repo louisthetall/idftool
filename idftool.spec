@@ -1,5 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
-from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+from PyInstaller.utils.hooks import collect_data_files
 
 datas = []
 datas += collect_data_files('esptool')
@@ -14,9 +14,7 @@ a = Analysis(
     datas=datas,
     # idftool.fs and its backends are imported lazily inside the fs commands, to keep them
     # off the startup path; name them so the analysis can't miss them.
-    # bitstring (under espefuse) picks its backend module at runtime.
-    hiddenimports=['idftool.fs', 'idftool.fs.fatfs', 'idftool.fs.littlefs', 'idftool.fs.spiffs']
-    + collect_submodules('bitstring'),
+    hiddenimports=['idftool.fs', 'idftool.fs.fatfs', 'idftool.fs.littlefs', 'idftool.fs.spiffs'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

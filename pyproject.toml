@@ -15,8 +15,9 @@
         "questionary>=2.0",
         # Ranges, not `~=x.y.z`: each floor is the oldest release with the API idftool
         # uses, and the code targets the latest. esptool 5.4 moved its logger onto
-        # esp-pylib, which idftool quiets during writes.
-        "esptool>=5.4,<6",
+        # esp-pylib, which idftool quiets during writes; 5.6 vendors bitstring inside
+        # espefuse, so neither idftool nor a frozen build needs the package.
+        "esptool>=5.6,<6",
         "esp-idf-defs~=0.1.5",
         # Serial port discovery and sorting, shared with esptool (which moved this
         # code out to esp-pylib). Floor is 1.1.4 rather than 1.0: the sort key
