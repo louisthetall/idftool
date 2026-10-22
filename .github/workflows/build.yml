@@ -1,10 +1,10 @@
-name: Build idftool
+name: build
 
 on: [push, pull_request]
 
 jobs:
   build-idftool-binaries:
-    name: Build idftool for ${{ matrix.platform }}
+    name: build (${{ matrix.platform }})
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -75,7 +75,7 @@ jobs:
           archive: false
 
   create_release:
-    name: Create GitHub release
+    name: release
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     needs: build-idftool-binaries
