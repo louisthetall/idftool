@@ -4,6 +4,13 @@ All notable changes to this project are documented here. The format is
 based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [v1.5.0] — 2026-10-24
+
+### Added
+- Works over `rfc2217://` ports, such as a board shared through
+  esp-rfc2217-relay: the sync timeout allows for a network round trip, and
+  port settings are sent only when they change, not around every command.
+
 ## [v1.4.0] — 2026-10-22
 
 ### Changed
@@ -422,6 +429,7 @@ this project adheres to [Semantic Versioning](https://semver.org/).
 ### Added
 - Initial release.
 
+[v1.5.0]: https://github.com/nebkat/idftool/releases/tag/v1.5.0
 [v1.4.0]: https://github.com/nebkat/idftool/releases/tag/v1.4.0
 [v1.3.1]: https://github.com/nebkat/idftool/releases/tag/v1.3.1
 [v1.3.0]: https://github.com/nebkat/idftool/releases/tag/v1.3.0
