@@ -206,6 +206,9 @@ def probe_port(port: str, baud: int, identify: Optional[Identify] = None) -> dic
     """Chip, MAC and ``identify(esp)`` for `port`; failures go in ``error``."""
     from esptool.cmds import detect_chip
 
+    from idftool import network
+
+    network.prepare(port)
     with quiet_esptool():
         try:
             esp = detect_chip(port, baud=baud, connect_attempts=1)

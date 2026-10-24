@@ -18,6 +18,7 @@ from esp_idf_defs.partitions import PartitionTable, PartitionDefinition, \
 
 from esp_pylib.serial_ports import get_port_names
 
+from idftool import network
 from idftool.display import print_partition_table
 from idftool.partitions import check_image_file, load_partition_table_file, read_otadata, \
     require_partitions
@@ -27,6 +28,7 @@ from idftool.ports import find_port_for_mac, find_port_for_usb_serial, print_rer
 def get_esp(port: str | None, baud: int) -> ESPLoader:
     esp: ESPLoader | None = None
     if port:
+        network.prepare(port)
         esp = detect_chip(port, baud=baud)
     else:
         ports = get_port_names()

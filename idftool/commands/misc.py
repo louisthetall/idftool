@@ -13,6 +13,7 @@ from esptool.cmds import detect_chip
 from esp_pylib.constants import ESPRESSIF_VID
 from esp_pylib.serial_ports import get_port_list
 
+from idftool import network
 from idftool.cli import cli, pass_state
 from idftool.ports import adapter_name, probe_port, prompt_for_port, quiet_esptool, \
     usb_port_for_mac, usb_ports_for_serial
@@ -113,6 +114,19 @@ def _has_option(args, *names) -> bool:
     return any(arg == name or arg.startswith(name + "=")
                or (len(name) == 2 and arg.startswith(name) and not arg.startswith("--"))
                for arg in args for name in names)
+
+
+def _option_value(args, *names):
+    """The value `args` give the option `names`, in any spelling, else None."""
+    for index, arg in enumerate(args):
+        for name in names:
+            if arg == name:
+                return args[index + 1] if index + 1 < len(args) else None
+            if arg.startswith(name + "="):
+                return arg[len(name) + 1:]
+            if len(name) == 2 and arg.startswith(name) and not arg.startswith("--"):
+                return arg[2:]
+    return None
 
 
 def monitor(state, monitor_args=()):
@@ -227,7 +241,9 @@ def _tool_argv(state, args, needs_device) -> list[str]:
         prefix += ["--baud", str(state.baud)]
     if state.no_reset and not _has_option(args, "-a", "--after"):
         prefix += ["--after", "no-reset"]
-    return [*prefix, *args]
+    argv = [*prefix, *args]
+    network.prepare(_option_value(argv, "-p", "--port"))
+    return argv
 
 
 def _run(tool, argv) -> None:
