@@ -411,6 +411,46 @@ def test_a_bound_esp32_refuses_an_image_built_for_an_esp32s2(esp32, tmp_path):
     assert esp32.region(0, FLASH_SIZE) == before
 
 
+def test_compare_image_on_an_esp32_starts_at_its_bootloader(esp32, tmp_path):
+    from idftool import State, compare_image, write_image
+
+    image = image_booting_from_0x1000(tmp_path, ESP32ROM.IMAGE_CHIP_ID)
+    state = State.bind(esp32)
+    write_image(state, image, erase=False)
+    esp32.flash[NVS[0]] ^= 0xff
+    assert compare_image(state, image) == {
+        "bootloader": True, "partition_table": True, "nvs": False, "otadata": True,
+        "phy_init": True, "factory": True,
+    }
+
+
+def test_compare_image_names_each_region_the_image_reaches(held):
+    from idftool import State, compare_image
+
+    held.flash[NVS[0]] ^= 0xff  # the device has written its own NVS since it was flashed
+    assert compare_image(State.bind(held), CHIP / "flash-image.bin") == {
+        "bootloader": True, "partition_table": True, "nvs": False, "otadata": True,
+        "phy_init": True, "factory": True,
+    }
+
+
+def test_compare_image_compares_the_bootloader_header_the_write_would_set(held, monkeypatch):
+    import idftool.flash as flash
+    from idftool import State, compare_image
+
+    # The fixture's bootloader says 4MB; write_image would rewrite that to the detected size.
+    monkeypatch.setattr(flash, "detect_flash_size", lambda esp: "8MB")
+    assert compare_image(State.bind(held), CHIP / "flash-image.bin")["bootloader"] is False
+
+
+def test_compare_factory_says_whether_the_factory_partition_holds_the_app(held):
+    from idftool import State, compare_factory
+
+    state = State.bind(held)
+    assert compare_factory(state, CHIP / "app-v1.bin") is True
+    assert compare_factory(state, CHIP / "app-v2.bin") is False
+
+
 # --- NVS and filesystems --------------------------------------------------------------------
 
 def test_dump_bundle_includes_the_bootloader(run, esp):

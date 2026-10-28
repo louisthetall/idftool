@@ -233,6 +233,26 @@ def flash_matches(esp, address, data, first_chunk_size=CHECK_FIRST_CHUNK_SIZE,
     return True
 
 
+def resolve_flash_size(esp, flash_size):
+    """`flash_size` as esptool applies it to a bootloader's header: 'detect' becomes the size
+    of the chip's own flash."""
+    if flash_size == 'detect':
+        return detect_flash_size(esp) or '4MB'
+    return flash_size
+
+
+def prepare_comparison(esp, address, data, flash_size='keep'):
+    """`data` as flash would hold it once written at `address`, ready for :func:`flash_matches`.
+
+    Raises where flash cannot be compared on this device (:func:`flash_check_unavailable`),
+    rather than letting a caller read "cannot tell" as "differs".
+    """
+    unavailable = flash_check_unavailable(esp, {})
+    if unavailable:
+        raise RuntimeError(f"Cannot compare against flash: {unavailable}")
+    return bytes_as_written(esp, address, data, flash_size=flash_size)
+
+
 def flash_check_unavailable(esp, options):
     """Why flash contents cannot be compared before writing, or None when they can.
 
@@ -451,9 +471,8 @@ def write_flash(esp, addr_data, flash_freq='keep', flash_mode='keep', flash_size
         if unavailable:
             print(f"Note: not checking what is already in flash, {unavailable}")
         else:
-            if flash_size == 'detect':
-                # The comparison needs the bootloader header esptool will write.
-                flash_size = detect_flash_size(esp) or '4MB'
+            # The comparison needs the bootloader header esptool will write.
+            flash_size = resolve_flash_size(esp, flash_size)
             addr_data = _plan_writes(esp, addr_data, diff, flash_freq, flash_mode,
                                      flash_size, kwargs)
             if not addr_data:

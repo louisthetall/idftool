@@ -12,7 +12,8 @@ from esp_idf_defs.partitions import PartitionTable
 
 from idftool.apps import find_bootloader, print_partition_table_and_apps
 from idftool.cli import cli, pass_state
-from idftool.flash import flash_options, option_group, write_flash, write_flash_options
+from idftool.flash import flash_matches, flash_options, option_group, prepare_comparison, \
+    resolve_flash_size, write_flash, write_flash_options
 from idftool.params import BASED_INT
 from idftool.partitions import check_image_file, get_partition_address, require_partitions
 
@@ -130,6 +131,47 @@ def write_image(state, image_file, erase=True, **options):
             "chip that was just wiped. Pass --no-erase (erase=False) to write only the "
             "regions that differ.")
 
+    loaded, address, image_data = _image_to_write(state, image_file)
+    print(f"Writing image '{image_file}'...")
+    write_flash(
+        esp=loaded.esp,
+        addr_data=[(address, image_data)],
+        flash_size='detect',
+        **write_flash_options(options, erase_all=erase),
+    )
+
+
+def compare_image(state, image_file):
+    """Which regions of flash already hold what :func:`write_image` would write there.
+
+    Keyed by the names ``write`` and ``read`` take, in flash order: ``bootloader``,
+    ``partition_table``, and each partition the image reaches; those past its end are left
+    out. A region is True when writing the image would leave it unchanged, so the bytes
+    compared are the ones the write puts there, the bootloader's header carrying the detected
+    flash size. The comparison runs on the device (:func:`idftool.flash.flash_matches`), so
+    nothing is read back.
+
+    The image is checked as :func:`write_image` checks it: one built for another chip raises
+    rather than comparing as different.
+    """
+    loaded, address, image_data = _image_to_write(state, image_file)
+    esp = loaded.esp
+    prepared = prepare_comparison(esp, address, image_data, resolve_flash_size(esp, 'detect'))
+    entries = {entry.name: entry for entry in
+               (loaded.bootloader_entry, loaded.partition_table_entry, *loaded.partition_table)}
+    regions = {}
+    for entry in sorted(entries.values(), key=lambda entry: entry.offset):
+        start = max(entry.offset, address)
+        end = min(entry.offset + entry.size, address + len(prepared))
+        if start < end:
+            regions[entry.name] = flash_matches(esp, start,
+                                                prepared[start - address:end - address])
+    return regions
+
+
+def _image_to_write(state, image_file):
+    """Check `image_file` against the device, and return what writing it puts where:
+    ``(loaded, address, data)``."""
     loaded = state.setup(image_file=image_file)
     esp = loaded.esp
     if os.path.getsize(image_file) == 0:
@@ -153,14 +195,7 @@ def write_image(state, image_file, erase=True, **options):
     with open(image_file, 'rb') as image_f:
         image_f.seek(esp.BOOTLOADER_FLASH_OFFSET)
         image_data = image_f.read()
-
-    print(f"Writing image '{image_file}'...")
-    write_flash(
-        esp=esp,
-        addr_data=[(esp.BOOTLOADER_FLASH_OFFSET, image_data)],
-        flash_size='detect',
-        **write_flash_options(options, erase_all=erase),
-    )
+    return loaded, esp.BOOTLOADER_FLASH_OFFSET, image_data
 
 
 @cli.command('write-image', aliases=['reflash'],

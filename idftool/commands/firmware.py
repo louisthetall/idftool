@@ -7,7 +7,8 @@ from esp_idf_defs.partitions import APP_TYPE, DATA_TYPE, SUBTYPES
 
 from idftool.apps import load_app_binary
 from idftool.cli import cli, pass_state
-from idftool.flash import flash_options, option_group, write_flash, write_flash_options
+from idftool.flash import flash_matches, flash_options, option_group, prepare_comparison, \
+    write_flash, write_flash_options
 from idftool.partitions import read_otadata, write_otadata
 
 # Keep the pass-through write options in a panel of their own.
@@ -24,11 +25,31 @@ def factory(state, app_binary_file, **options):
 
     Keyword arguments go to :func:`idftool.flash.write_flash` (see
     :data:`idftool.flash.WRITE_FLASH_OPTIONS`)."""
+    loaded, partition, app_binary, image_metadata = _factory_to_write(state, app_binary_file)
+    flash_factory(loaded.esp, loaded.partition_table, partition, app_binary, image_metadata,
+                  options)
+
+
+def compare_factory(state, app_binary_file):
+    """Whether the factory (or ota_0) partition already holds what :func:`factory` would write.
+
+    Only the app is compared: otadata, which ``factory`` erases, says which slot boots rather
+    than what is in it. The app is checked as ``factory`` checks it, so one built for another
+    chip raises rather than comparing as different.
+    """
+    loaded, partition, app_binary, _ = _factory_to_write(state, app_binary_file)
+    esp = loaded.esp
+    return flash_matches(esp, partition.offset,
+                         prepare_comparison(esp, partition.offset, app_binary))
+
+
+def _factory_to_write(state, app_binary_file):
+    """Check `app_binary_file` against the device, and return what ``factory`` writes where:
+    ``(loaded, partition, app_binary, image_metadata)``."""
     loaded = state.setup()
-    esp, partition_table = loaded.esp, loaded.partition_table
-    partition = factory_partition(partition_table)
-    app_binary, image_metadata = load_app_binary(esp, app_binary_file, partition)
-    flash_factory(esp, partition_table, partition, app_binary, image_metadata, options)
+    partition = factory_partition(loaded.partition_table)
+    app_binary, image_metadata = load_app_binary(loaded.esp, app_binary_file, partition)
+    return loaded, partition, app_binary, image_metadata
 
 
 def factory_partition(partition_table):

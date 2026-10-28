@@ -66,6 +66,32 @@ chip's own offset. Commands that start a tool of
 their own on the port (`monitor`, `idf_py`, `run_esptool`, `run_espefuse`) are
 not for a bound `State`.
 
+## Comparing with flash
+
+`compare_image` and `compare_factory` say whether flash already holds what
+`write_image` and `factory` would write. Flash is hashed on the chip, so
+nothing is read back.
+
+```python
+from idftool import compare_factory, compare_image
+
+compare_image(state, "flash.img")
+# {'bootloader': True, 'partition_table': True, 'nvs': False, ..., 'factory': True}
+
+compare_factory(state, "build/app.bin")  # True or False
+```
+
+`compare_image` answers per region, keyed by the names `write` takes, and leaves
+out partitions past the end of the image. Which regions matter is yours to
+decide: a device that has booted since it was flashed has written its own NVS,
+so its image no longer matches as a whole. The bytes compared are the ones the
+write would put there, so a bootloader whose header gives another flash size
+than the chip's differs.
+
+An image or app built for another chip raises, as the write would. So does a
+device whose flash cannot be compared: one in secure download mode, or an
+ESP8266 on its ROM loader.
+
 ## Choosing a device
 
 `idftool.ports.select_device()` shows the [picker](guide/choosing-a-device.md)
@@ -98,9 +124,9 @@ raises, the device is still listed and usable, with the error next to it.
 | Group | Functions |
 |--------|-----------|
 | Discovery | `list_devices`, `monitor`, `enter_bootloader` |
-| Firmware | `factory`, `ota`, `get_boot`, `set_boot`, `clear_boot` |
+| Firmware | `factory`, `ota`, `get_boot`, `set_boot`, `clear_boot`, `compare_factory` |
 | Partition I/O | `read_partition`, `write_partitions`, `erase_partition`, `view_partition` |
-| Images | `create_image`, `dump_image`, `write_image`, `print_image` |
+| Images | `create_image`, `dump_image`, `write_image`, `print_image`, `compare_image` |
 | Bundles | `create_bundle`, `dump_bundle`, `write_bundle`, `print_bundle` |
 | Partition table | `print_table`, `create_table`, `dump_table`, `write_table` |
 | NVS | `create_nvs`, `write_nvs`, `print_nvs`, `extract_nvs`, `read_nvs`, `get_nvs`, `set_nvs` |
