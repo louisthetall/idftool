@@ -8,13 +8,17 @@ import zipfile
 
 import pytest
 from click.testing import CliRunner
-from esptool.targets import ESP32S3ROM
+from esptool.targets import ESP32ROM, ESP32S2ROM, ESP32S3ROM
+from esp_idf_defs.partitions import PARTITION_TABLE_OFFSET
 
 from conftest import FIXTURES
 
 CHIP = FIXTURES / "esp32s3"
 FLASH_SIZE = 0x400000
 MAC = bytes.fromhex("7c2c679279c0")
+
+#: Where an ESP image header keeps its chip ID (``esp_image_header_t.chip_id``).
+CHIP_ID_FIELD = slice(12, 14)
 
 # From the fixture partition table.
 NVS = (0x9000, 0x6000)
@@ -321,6 +325,90 @@ def test_dump_bundle_then_write_bundle_restores_the_partitions(run, tmp_path, es
     esp.erase_region(*FACTORY)
     run("write-bundle", "backup.zip")
     assert esp.region(*FACTORY) == original
+
+
+# --- a loader the caller already holds ------------------------------------------------------
+
+@pytest.fixture
+def held(esp, monkeypatch):
+    """`esp` as a loader the caller already holds: opening a connection of its own fails."""
+    import idftool.state as state
+
+    def connect(port, **_):
+        raise AssertionError(f"opened a second connection to {port}")
+
+    monkeypatch.setattr(state, "detect_chip", connect)
+    return esp
+
+
+def test_a_bound_state_writes_an_image_through_the_held_loader(held):
+    from idftool import State, write_image
+
+    image = (CHIP / "flash-image.bin").read_bytes()
+    held.erase_region(0, FLASH_SIZE)
+    write_image(State.bind(held), CHIP / "flash-image.bin", erase=False)
+    assert held.region(0, len(image)) == image
+
+
+def for_chip(image: bytes, chip_id: int) -> bytes:
+    """An ESP image with an appended SHA-256, rebuilt for another chip: the header's chip ID
+    rewritten and the digest recomputed to match."""
+    data = bytearray(image)
+    data[CHIP_ID_FIELD] = chip_id.to_bytes(2, "little")
+    digest = -hashlib.sha256().digest_size
+    data[digest:] = hashlib.sha256(data[:digest]).digest()
+    return bytes(data)
+
+
+def image_booting_from_0x1000(tmp_path, chip_id):
+    """The fixture image with its bootloader moved to 0x1000, where the ESP32 and ESP32-S2
+    boot from, and rebuilt for `chip_id`."""
+    loader = for_chip((CHIP / "bootloader.bin").read_bytes(), chip_id)
+    image = bytearray((CHIP / "flash-image.bin").read_bytes())
+    image[:PARTITION_TABLE_OFFSET] = b"\xff" * PARTITION_TABLE_OFFSET
+    offset = ESP32ROM.BOOTLOADER_FLASH_OFFSET
+    image[offset:offset + len(loader)] = loader
+    path = tmp_path / f"chip-{chip_id}.img"
+    path.write_bytes(image)
+    return path
+
+
+@pytest.fixture
+def esp32(held):
+    """`held` as an ESP32, whose ROM boots from 0x1000 rather than from 0 as the S3's does."""
+    held.CHIP_NAME = ESP32ROM.CHIP_NAME
+    held.IMAGE_CHIP_ID = ESP32ROM.IMAGE_CHIP_ID
+    held.BOOTLOADER_FLASH_OFFSET = ESP32ROM.BOOTLOADER_FLASH_OFFSET
+    return held
+
+
+def test_a_bound_esp32_takes_its_bootloader_from_its_own_offset(esp32, tmp_path):
+    from idftool import State, write_image
+
+    image = image_booting_from_0x1000(tmp_path, ESP32ROM.IMAGE_CHIP_ID)
+    esp32.erase_region(0, FLASH_SIZE)
+    write_image(State.bind(esp32), image, erase=False)
+    loader = image.read_bytes()[ESP32ROM.BOOTLOADER_FLASH_OFFSET:PARTITION_TABLE_OFFSET]
+    assert esp32.region(ESP32ROM.BOOTLOADER_FLASH_OFFSET, len(loader)) == loader
+
+
+def test_a_bound_esp32_refuses_an_image_built_for_an_s3(esp32):
+    from idftool import State, write_image
+
+    before = esp32.region(0, FLASH_SIZE)
+    with pytest.raises(RuntimeError, match="Invalid bootloader"):
+        write_image(State.bind(esp32), CHIP / "flash-image.bin", erase=False)
+    assert esp32.region(0, FLASH_SIZE) == before
+
+
+def test_a_bound_esp32_refuses_an_image_built_for_an_esp32s2(esp32, tmp_path):
+    from idftool import State, write_image
+
+    image = image_booting_from_0x1000(tmp_path, ESP32S2ROM.IMAGE_CHIP_ID)
+    before = esp32.region(0, FLASH_SIZE)
+    with pytest.raises(RuntimeError, match="Chip ID mismatch"):
+        write_image(State.bind(esp32), image, erase=False)
+    assert esp32.region(0, FLASH_SIZE) == before
 
 
 # --- NVS and filesystems --------------------------------------------------------------------

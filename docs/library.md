@@ -46,6 +46,26 @@ An unknown option raises `TypeError` rather than being ignored. `esptool` reads
 its options with `kwargs.get`, so a misspelled one would otherwise be a write
 that quietly did something else.
 
+## A connection you already hold
+
+A caller that already has an `esptool` `ESPLoader` open, such as a test harness
+that keeps the port between operations, binds a `State` to it instead of
+letting idftool open a second connection to the same port:
+
+```python
+from idftool import State, write_image
+
+state = State.bind(esp)
+write_image(state, "flash.img", erase=False)
+```
+
+The connection stays yours: idftool does not reset or close it. The partition
+table comes from where it always does (the image being written,
+`partition_table_file=`, or the device), and the bootloader is found at the
+chip's own offset. Commands that start a tool of
+their own on the port (`monitor`, `idf_py`, `run_esptool`, `run_espefuse`) are
+not for a bound `State`.
+
 ## Choosing a device
 
 `idftool.ports.select_device()` shows the [picker](guide/choosing-a-device.md)

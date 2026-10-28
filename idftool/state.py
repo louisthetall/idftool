@@ -14,7 +14,7 @@ from esptool.cmds import detect_chip, detect_flash_size
 
 from esp_idf_defs.otadata import OtaDataParameters
 from esp_idf_defs.partitions import PartitionTable, PartitionDefinition, \
-    BOOTLOADER_TYPE, SUBTYPES, PARTITION_TABLE_TYPE
+    BOOTLOADER_TYPE, SUBTYPES, PARTITION_TABLE_TYPE, PARTITION_TABLE_OFFSET, PARTITION_TABLE_SIZE
 
 from esp_pylib.serial_ports import get_port_names
 
@@ -99,15 +99,36 @@ class State:
             print_rerun_hint(found["port"], found.get("mac"), found.get("serial"))
         return found["port"]
 
+    @classmethod
+    def bind(cls, esp: ESPLoader, *, partition_table_file=None,
+             partition_table_offset=PARTITION_TABLE_OFFSET,
+             partition_table_size=PARTITION_TABLE_SIZE) -> 'State':
+        """A State that works through `esp`, a loader the caller already holds.
+
+        Nothing here opens, resets or closes the connection. Commands that start a tool of
+        their own on the port (``monitor``, ``idf_py``, ``run_esptool``, ``run_espefuse``) are
+        not for it."""
+        state = cls(port=None, baud=None, no_reset=True,
+                    partition_table_file=partition_table_file,
+                    partition_table_offset=partition_table_offset,
+                    partition_table_size=partition_table_size,
+                    primary_bootloader_offset=None, recovery_bootloader_offset=None)
+        state.esp = esp
+        state._default_bootloader_offset(esp)
+        return state
+
     def connect(self) -> ESPLoader:
         if self.esp is None:
             self.port = self.resolve_port()
             self.esp = get_esp(port=self.port, baud=self.baud)
-            # Fall back to the connected chip's bootloader offset only when the user didn't set one
-            # explicitly, keeping the precedence: explicit CLI > chip default > value present in CSV.
-            if self.primary_bootloader_offset is None:
-                self.primary_bootloader_offset = self.esp.BOOTLOADER_FLASH_OFFSET
+            self._default_bootloader_offset(self.esp)
         return self.esp
+
+    def _default_bootloader_offset(self, esp: ESPLoader):
+        # Fall back to the connected chip's bootloader offset only when the user didn't set one
+        # explicitly, keeping the precedence: explicit CLI > chip default > value present in CSV.
+        if self.primary_bootloader_offset is None:
+            self.primary_bootloader_offset = esp.BOOTLOADER_FLASH_OFFSET
 
     def _load_partition_table(self, image_file) -> PartitionTable:
         # Load from the most specific source available:
